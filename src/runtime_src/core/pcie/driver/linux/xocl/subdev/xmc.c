@@ -132,6 +132,7 @@ enum status_mask {
 	STATUS_MASK_INIT_DONE		= 0x1,
 	STATUS_MASK_STOPPED		= 0x2,
 	STATUS_MASK_PAUSE		= 0x4,
+	STATUS_MASK_SAT			= (0b111111<<18),
 };
 
 enum cap_mask {
@@ -2036,8 +2037,13 @@ static int load_xmc(struct xocl_xmc *xmc)
 		xocl_info(&xmc->pdev->dev, "Waiting for XMC to finish init...");
 		retry = 0;
 		while (retry++ < MAX_XMC_RETRY &&
-			!(READ_REG32(xmc, XMC_STATUS_REG) & STATUS_MASK_INIT_DONE))
+			(READ_REG32(xmc, XMC_STATUS_REG) & STATUS_MASK_INIT_DONE) != 0x1 &&
+			(READ_REG32(xmc, XMC_STATUS_REG) & STATUS_MASK_SAT) != 0x0)
+		{
 			msleep(RETRY_INTERVAL);
+			xocl_err(&xmc->pdev->dev, "Waiting for XMC to finish init: Status Reg 0x%x", READ_REG32(xmc, XMC_STATUS_REG));
+		}
+			
 		if (retry >= MAX_XMC_RETRY) {
 			xocl_err(&xmc->pdev->dev,
 				"XMC did not finish init sequence!");
@@ -2055,10 +2061,11 @@ static int load_xmc(struct xocl_xmc *xmc)
 	xocl_info(&xmc->pdev->dev, "XMC and scheduler Enabled, retry %d",
 			retry);
 	xocl_info(&xmc->pdev->dev,
-		"XMC info, version 0x%x, status 0x%x, id 0x%x",
+		"XMC info, version 0x%x, status 0x%x, id 0x%x, sat_status 0x%x",
 		READ_REG32(xmc, XMC_VERSION_REG),
 		READ_REG32(xmc, XMC_STATUS_REG),
-		READ_REG32(xmc, XMC_MAGIC_REG));
+		READ_REG32(xmc, XMC_MAGIC_REG),
+		READ_REG32(xmc, XMC_STATUS_REG) & STATUS_MASK_SAT);
 	xmc->state = XMC_STATE_ENABLED;
 
 	xmc->cap = READ_REG32(xmc, XMC_FEATURE_REG);
